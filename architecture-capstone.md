@@ -96,3 +96,37 @@ Write tools:
 
 ## Example end-to-end flow
 User asks "any recent infant-formula recalls I should worry about?" → agent calls `semantic_search` → summarizes matches → user says "watch that brand and alert me" → agent calls `add_to_watchlist` + `create_alert` (writes to Lakebase). This single interaction exercises the Spark data, the embeddings, the frontend, and the read + write agent.
+
+Here’s your bullet list version of the scope note:
+
+---
+
+### **Scope Note — What This Omits vs. a Production System**
+
+This document is deliberately minimal and demonstrates each capstone requirement once, not a full production-ready system. A robust build would include:
+
+- **Ingestion Enhancements:**
+  - Correct backfill and incremental logic per source (e.g., `search_after` cursor for openFDA, bulk flat files for NHTSA instead of per-vehicle API).
+  - Retries, rate-limit handling, and schema-drift tolerance.
+  - Data-quality expectations to quarantine malformed rows instead of silently dropping them.
+  - Immutable landing zone for full replay capability (since some sources prune their own history).
+
+- **Observability:**
+  - Pipeline-failure alerting.
+  - Data-freshness SLAs.
+  - Monitoring of embedding-refresh and Lakebase-sync lag.
+
+- **Agent Guardrails:**
+  - Authorization to restrict users to their own watchlists.
+  - Confirmation steps before write actions.
+  - Tool-input validation.
+  - Defenses against prompt injection in recall text.
+  - Awareness of LLM latency and cost.
+
+- **Engineering Scaffolding:**
+  - Unit tests for per-source normalization mappings (classification mismatch is fragile).
+  - CI/CD pipelines.
+  - Unity Catalog access control and secret management.
+  - Explicit decisions on batch cadence, serving layer, and retention.
+
+In short, the capstone document is an **acceptance test**. A production architecture would additionally address **separation of concerns, failure modes, security, governance, and cost**—the invisible but critical factors for long-term success.
