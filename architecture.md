@@ -6,21 +6,60 @@ Architecture for ingesting US government recall data into a Databricks lakehouse
 
 - Ingest recalls from all US federal sources (FDA, CPSC, NHTSA, USDA-FSIS).
 - Normalize them into one unified schema.
-- Serve a fast search app (keyword + optional semantic) over the combined dataset.
+- Serve a search app (keyword + semantic) over the combined dataset.
+- Expose an AI agent that can search recalls and take actions (watchlists, alerts) on the user's behalf.
 
 ## Flow
 
-```mermaid
-flowchart TD
-  SRC["US recall sources — REST / JSON<br/>openFDA x4 · CPSC · NHTSA · FSIS"] --> LAND["Landing zone — raw files<br/>Immutable JSON in UC Volume"]
-  LAND --> BRZ["Bronze — technical validation<br/>Schema, typing, dedup, quality"]
-  BRZ --> SLV["Silver — normalized<br/>Cross-source unified schema"]
-  SLV --> GLD["Gold — unified recalls<br/>Search-optimized + embeddings"]
-  GLD --> LKB["Lakebase (Postgres)<br/>Keyword full-text search"]
-  GLD --> VS["Vector Search<br/>Semantic / NL search"]
-  LKB --> APP["Databricks App — Flask + SPA<br/>Search UI · filters · watchlists"]
-  VS --> APP
-  UC["Unity Catalog — governance, lineage, secrets across all layers"]
+```
+   +----------------------------------+
+   |  US recall sources               |
+   |  openFDA, CPSC, NHTSA, FSIS       |
+   +----------------------------------+
+                   |
+                   v
+   +----------------------------------+
+   |  Landing zone  (raw files)       |
+   +----------------------------------+
+                   |
+                   v
+   +----------------------------------+
+   |  Bronze  (technical validation)  |
+   +----------------------------------+
+                   |
+                   v
+   +----------------------------------+
+   |  Silver  (normalized)            |
+   +----------------------------------+
+                   |
+                   v
+   +----------------------------------+
+   |  Gold  (unified + embeddings)    |
+   +----------------------------------+
+                   |
+          +--------+--------+
+          |                 |
+          v                 v
+   +--------------+   +------------------+
+   |  Lakebase    |   |  Vector Search   |
+   |  FTS  (R/W)  |   |  embeddings (R)  |
+   +--------------+   +------------------+
+          |                 |
+          +--------+--------+
+                   |
+                   v
+   +----------------------------------+
+   |  AI agent  (read + write tools)  |
+   +----------------------------------+
+                   |
+                   v
+   +----------------------------------+
+   |  Databricks App  (Flask + SPA)   |
+   |  chat + search UI                |
+   +----------------------------------+
+
+   Unity Catalog governs all layers
+   (catalog, schemas, Volume, secrets).
 ```
 
 Unity Catalog governs every layer (catalog, schemas, the landing Volume, secrets). Orchestration is a single daily Lakeflow Job; transforms run as a Lakeflow Declarative Pipeline (or dbt-core).
@@ -76,13 +115,30 @@ Two paths off gold:
 
 **Keyword — Lakebase (Postgres).** Sync gold into Lakebase, build a `tsvector` GIN index over `title + product_description + brand + reason_hazard`, query with `plainto_tsquery` + `ts_rank`. Sub-second keyword search with filters on category, agency, classification, date, status. Uses the `lakebase.py` + psycopg2 pattern.
 
-**Semantic — Databricks Vector Search (optional).** A Delta-sync index over the embedded description enables natural-language queries ("listeria in packaged deli meat") that keyword search misses. The app can expose a keyword/semantic toggle, or blend both (keyword filter → vector rerank).
+**Semantic — Databricks Vector Search (core).** Embed the recall narrative text (`product_description + reason_hazard`, plus fuller notice text where a source provides it) and index it in Databricks Vector Search (Delta-sync from gold). Enables natural-language queries ("listeria in packaged deli meat") that keyword search misses. This is also the unstructured-data retrieval layer the agent relies on, so it is a required component, not an add-on.
+
+## AI agent
+
+An agent (Databricks Mosaic AI Agent Framework, served via Model Serving) sits between the app's chat panel and the data. It carries two tool groups — read tools for retrieval and write tools that take real actions against Lakebase.
+
+Read / retrieve tools:
+- `keyword_search(query, filters)` → Lakebase full-text search
+- `semantic_search(query)` → Vector Search over recall embeddings
+- `get_recall(recall_id)` → Lakebase
+
+Write / action tools:
+- `add_to_watchlist(user, brand|category)` → Lakebase
+- `create_alert(user, criteria)` → Lakebase
+- `annotate_recall(recall_id, note)` → Lakebase
+
+Example flow: "any recent infant-formula recalls?" → agent calls `semantic_search`, summarizes matches → user says "watch that brand and alert me" → agent calls `add_to_watchlist` + `create_alert` (writes to Lakebase). One interaction exercises the Spark data, the embeddings, and the read + write tools.
 
 ## The app
 
-A Databricks App: Flask backend + SPA frontend, bound to `0.0.0.0:$DATABRICKS_APP_PORT`, identity via `X-Forwarded-Email`.
+A Databricks App: Flask backend + SPA frontend, bound to `0.0.0.0:$DATABRICKS_APP_PORT`, identity via `X-Forwarded-Email`. The frontend has a chat panel (talks to the agent) and a direct search view.
 
 Endpoints (approx.):
+- `POST /api/agent` — chat endpoint; invokes the agent, which calls its own read/write tools
 - `GET /api/search?q=&category=&agency=&class=&from=&to=`
 - `GET /api/recall/<id>`
 - `GET/POST /api/watchlist` — keyed on forwarded email; user saves brands/categories and sees new matches. Watchlist table lives in Lakebase alongside the synced recalls.
@@ -102,3 +158,15 @@ The naming now collides three ways, so alias clearly in the repo:
 - dbt-core — could own the silver/gold transforms.
 
 All valid, but inside Databricks the idiomatic path is Lakeflow Jobs + Auto Loader + Declarative Pipelines, keeping everything under one governance and lineage plane. Note Databricks' own pipeline import is now `from pyspark import pipelines as dp` (formerly `import dlt`) — distinct from the dlthub `dlt` package.
+
+## Capstone requirement coverage
+
+| Requirement | Where met |
+|---|---|
+| Data pipeline in Spark | Medallion pipeline (landing → bronze → silver → gold) via Lakeflow Declarative Pipelines + Auto Loader. |
+| Integration with ≥1 third-party API | openFDA, CPSC, NHTSA, USDA-FSIS recall APIs. |
+| Processing of unstructured data | Recall narrative text embedded and indexed in Vector Search for semantic retrieval. |
+| Databricks App with a frontend | Flask + SPA app (chat panel + search view). |
+| AI agent with read **and** write tools | Agent with retrieval tools (keyword + semantic search) and write tools (watchlist, alert, annotate) against Lakebase. |
+
+Shared skeleton: relational tables in Lakebase ✅ · embeddings over unstructured text ✅ · agent with read + write DB tools ✅.
