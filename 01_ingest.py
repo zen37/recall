@@ -4,6 +4,11 @@
 # MAGIC
 # MAGIC openFDA food + FSIS → **one table** `{catalog}.{schema}.unified`. No bronze/silver — fetch, map,
 # MAGIC union, write. Overwrite on re-run. Import this file into Databricks as a notebook.
+# MAGIC
+# MAGIC **Phase 1 (current): openFDA only**, all the way through the pipeline. FSIS fetch is disabled
+# MAGIC below — `fsis = []` — but `fetch_fsis`/`map_fsis` stay in the file untouched. Turning FSIS on in
+# MAGIC phase 2 is a one-line change (see the fetch cell); nothing else in this notebook or downstream
+# MAGIC needs to change, because the unified schema already has `source`/`category` for it.
 
 # COMMAND ----------
 # MAGIC %md ## Parameters
@@ -43,12 +48,14 @@ def fetch_fsis():
     return data if isinstance(data, list) else data.get("data", [])
 
 openfda = fetch_openfda_food()
-fsis = fetch_fsis()
+fsis = []          # fetch_fsis()  # PHASE 1: disabled. Re-enable in phase 2 once openFDA is
+                    # proven end to end (unified -> Lakebase -> Vector Search -> agent -> app).
 print("openFDA:", len(openfda), "| FSIS:", len(fsis))
 
 # COMMAND ----------
 # MAGIC %md ### Confirm FSIS field names (marked `?` below)
 # MAGIC Eyeball this once, then fix `map_fsis` if a field name differs.
+# MAGIC Phase 1: this will print "no FSIS records returned" since `fsis` is disabled above — expected.
 
 # COMMAND ----------
 print(json.dumps(fsis[0], indent=2)[:2500] if fsis else "no FSIS records returned")
@@ -94,6 +101,7 @@ def map_fsis(r):
     # Confirmed: field_recall_number, field_recall_date,
     # field_recall_classification, field_recall_reason.
     # `?` fields use fallbacks — adjust after checking the inspect cell.
+    # Not called in phase 1 (fsis == []) — retained here so phase 2 is additive, not a rewrite.
     return {
         "recall_id": f"fsis::{r.get('field_recall_number')}",
         "source": "fsis",
