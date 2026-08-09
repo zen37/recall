@@ -264,11 +264,30 @@ from mlflow.types.agent import ChatAgentMessage  # noqa: E402
 bot = agent_mod.RecallsAgent(llm_endpoint=llm_endpoint)
 
 
+# ChatAgentMessage.tool_calls come back as ToolCall pydantic objects (attribute
+# access), not dicts — handle both so the display/asserts are version-proof.
+def _tc_fn(tc):
+    fn = tc["function"] if isinstance(tc, dict) else tc.function
+    name = fn["name"] if isinstance(fn, dict) else fn.name
+    args = fn["arguments"] if isinstance(fn, dict) else fn.arguments
+    return name, args
+
+
+def _tools_called(resp):
+    return [
+        _tc_fn(tc)[0]
+        for m in resp.messages
+        if getattr(m, "tool_calls", None)
+        for tc in m.tool_calls
+    ]
+
+
 def show(resp):
     for m in resp.messages:
         if getattr(m, "tool_calls", None):
             for tc in m.tool_calls:
-                print(f"  [tool call] {tc['function']['name']}({tc['function']['arguments']})")
+                name, args = _tc_fn(tc)
+                print(f"  [tool call] {name}({args})")
         elif m.role == "tool":
             print(f"  [tool result] {m.content[:200]}")
         else:
@@ -281,7 +300,7 @@ def show(resp):
 # COMMAND ----------
 resp = bot.predict(messages=[ChatAgentMessage(role="user", content="any recent listeria recalls?")])
 show(resp)
-called = [tc["function"]["name"] for m in resp.messages if getattr(m, "tool_calls", None) for tc in m.tool_calls]
+called = _tools_called(resp)
 assert "search_recalls" in called, f"agent did not call search_recalls (called: {called})"
 print("\nOK: agent invoked search_recalls and answered")
 
@@ -295,7 +314,7 @@ resp = bot.predict(
     custom_inputs={"user_email": "demo@example.com"},
 )
 show(resp)
-called = [tc["function"]["name"] for m in resp.messages if getattr(m, "tool_calls", None) for tc in m.tool_calls]
+called = _tools_called(resp)
 assert "add_to_watchlist" in called, f"agent did not call add_to_watchlist (called: {called})"
 
 # Confirm the row via the exact done-when query.
