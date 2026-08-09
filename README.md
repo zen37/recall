@@ -1,4 +1,8 @@
-Let me confirm the remaining unverified rows — FSIS, Lebensmittelwarnung's current feed and licence, MHRA, and a check on openFDA.FSIS confirmed. Now MHRA and the Germany licence/feed details.MHRA confirmed. Now the Germany licence and current feed details.Every row is now verified. Here's the final table with the two previously-unconfirmed cells resolved (FSIS endpoint and Germany feed), plus concrete endpoints filled in throughout.
+# Product Recall Data Sources — Access Reference (US · Canada · UK · EU)
+
+Build sheet for self-aggregating official government recall data. Every row below is a public source; access method, format, auth, and licence are noted per source. Verified against source documentation.
+
+## Master table
 
 | Jurisdiction | Source | Coverage | Access & endpoint | Format | Auth | Licence |
 |---|---|---|---|---|---|---|
@@ -15,19 +19,74 @@ Let me confirm the remaining unverified rows — FSIS, Lebensmittelwarnung's cur
 | **UK** | MHRA | Drugs & medical devices | `gov.uk/drug-device-alerts` — filterable finder + email alerts; no dedicated API | HTML | — | OGL v3.0 |
 | **EU** | EU Safety Gate (RAPEX) | Non-food consumer products, EU-wide | `ec.europa.eu/safety-gate-alerts/api` + weekly Excel/XML | JSON/XML/Excel | None | CC BY 4.0 |
 | **EU** | RASFF | EU food & feed (separate system) | RASFF Window public portal only — summary info, 2020+; full system authorities-only | Web | — | No open API/licence |
-| **France** | RappelConso (DGCCRF/DGAL) | All categories incl. food | REST API + bulk dataset on `data.economie.gouv.fr` / `data.gouv.fr` | JSON/CSV | None | Licence Ouverte 2.0 |
-| **Germany** | Lebensmittelwarnung (BVL) | Food, cosmetics, consumer articles, tattoo products, baby/children | RSS feeds (filterable by Bundesland or category) via `lebensmittelwarnung.de` RSS page; unofficial community API `lebensmittelwarnung.api.bund.dev` | RSS/XML | None | Not formally published |
+| **France** | RappelConso (DGCCRF/DGAL) | Food, non-food consumer goods, animal feed, **vehicles** (excl. medicines/devices) | REST API + bulk dataset on `data.economie.gouv.fr` / `data.gouv.fr` | JSON/CSV | None | Licence Ouverte 2.0 |
+| **France** | ANSM | Medicines & medical-device recalls | `ansm.sante.fr` safety pages — web/scrape; no recall API | HTML | — | (adjacent open data only) |
+| **Germany** | Lebensmittelwarnung (BVL) | Food, cosmetics, *Bedarfsgegenstände*, tattoo products, baby/children | RSS (all Länder + per-Land) via `lebensmittelwarnung.de/___LMW-Redaktion/RSSNewsfeed/rssnewsfeed_node.html` | RSS/XML | None | Not published — verify |
+| **Germany** | BAuA / Safety Gate-DE | Non-food consumer products (toys, electronics, machinery) | BAuA "Gefährliche Produkte" DB + `rueckrufe.de` = web/scrape; **use Safety Gate API filtered to DE** | Web / JSON | None | CC BY 4.0 (via Safety Gate) |
+| **Germany** | KBA Rückrufdatenbank | Vehicles, parts, accessories | Web UI with downloadable search results; no REST API | CSV/Excel | None | (not stated) |
+| **Germany** | BfArM + ABDA/AMK | Medicines & medical-device recalls | BfArM site = web/scrape; ABDA AMK RSS (`abda.de/rss`) exists but full content **members-only** | HTML / RSS (gated) | Login for ABDA full content | (not open) |
 
-What the confirmation resolved:
+---
 
-FSIS is confirmed and live. The Recall API delivers content in JSON at `https://www.fsis.usda.gov/fsis/api/recall/v/1`, filterable by field, with records carrying `field_recall_classification` (e.g. Class I), `field_recall_date`, `field_recall_number`, and `field_recall_reason`. It was FSIS's first public API, launched September 2023, and recall data also remains available via RSS. So US food = openFDA `/food/enforcement.json` + this — both confirmed, no key.
+## Resolved detail: France
 
-MHRA is web-only, as suspected. Alerts publish to the `gov.uk/drug-device-alerts` page as a filterable finder with email subscription for drugs and medical device alerts and recalls. No dedicated recall API — you'd scrape the finder or consume it through the general GOV.UK content/search API. One naming quirk worth knowing: MHRA renamed "Drug Alerts" to "Medicines recall/notification," and all Class 1 medicines recalls are also issued as National Patient Safety Alerts.
+France is close to Canada in breadth — one feed covers most categories cleanly, with pharma as the only gap.
 
-Germany's feed is confirmed but with two real caveats. The RSS is official and filterable by individual Bundesländer or by category (food, cosmetics, consumer articles). But: (1) I could not find a formally published open-data licence — it's official government warning content with no explicit CC/DL-DE licence stated, so treat reuse terms as unconfirmed. (2) Critically for a pipeline — entries are deleted after the product's best-before/use-by date plus a safety margin, and warnings for products without a durability date are typically published for about a year, then removed. So there's no historical archive to backfill from; you must poll continuously and persist records yourself or you'll lose them.
+**RappelConso — the main feed (clean).** Covers all general-public product recalls, food and non-food, including animal feed **and vehicles**, via a no-auth REST API with GTIN product codes, exportable on data.gouv.fr. This is broader than Germany's main feed, which does not include vehicles.
 
-Two structural notes that survive confirmation:
+- Excludes: medicines and medical devices (those go to ANSM).
+- Minor carve-out: second-hand, refurbished, and antique goods aren't subject to the RappelConso declaration obligation.
 
-The only genuinely non-API sources in this set are UK OPSS, UK MHRA, and EU RASFF — all web/scrape. Everything else is a real feed with no auth.
+**ANSM — pharma recalls (scrape).** Medicine/device batch recalls and withdrawals are published on `ansm.sante.fr` as safety-information web pages. There is **no dedicated recall API**. The `data.ansm` open-data platform and the BDPM medicines database exist but cover *adjacent* data — pharmacovigilance, medication errors, stock shortages, marketing authorisations — **not recalls**. So French pharma recalls are scrape-only.
 
-For a durable dataset, plan to store everything on ingest regardless of source. Germany actively deletes; RASFF's public window only reaches back to 2020; others prune too. Your aggregator's archive will quickly become more complete than several of the upstream sources themselves.
+**Data-trust caveats (RappelConso):**
+- Declarative registry — records are published by businesses themselves; DGCCRF checks after the fact, not upstream.
+- No published API SLA — a risk for critical production integrations.
+- Structural blind spot: products sold via non-EU / Asian marketplaces (Temu, Shein, AliExpress) are under-represented unless a targeted enforcement action forces a listing.
+
+**France resolves to 2 sources:** RappelConso (API) + ANSM (scrape, only if pharma is in scope).
+
+---
+
+## Resolved detail: Germany
+
+Germany is the most fragmented single country in this set — four categories split across four authorities, each with a different access method. It is the anti-Canada.
+
+**1. Food / cosmetics / consumer articles — Lebensmittelwarnung (BVL). Clean RSS.**
+- Feeds: one for all Länder plus one per Bundesland (16), at the RSS index page above. Categories: food, cosmetics, *Bedarfsgegenstände* (food/body-contact articles). Free, no personal data, continuous updates.
+- Grab the exact per-Land feed URLs from the RSS page — the site was rebuilt on a new CMS, so old hardcoded paths may be dead.
+- **Retention caveat:** records are deleted after the product's best-before/use-by date plus a safety margin; items without a durability date are typically kept ~1 year, then removed. No historical archive — you must poll and persist yourself.
+- Licence: not formally published — treat reuse terms as unconfirmed.
+
+**2. Non-food consumer products — BAuA / Safety Gate. Scrape, but redundant.**
+- BAuA's "Gefährliche Produkte in Deutschland" database (consumer platform `rueckrufe.de`) publishes recalls, warnings, and prohibition orders under the Product Safety Act — web/scrape, no API or feed found.
+- It substantially re-publishes a German-language extract of the weekly Safety Gate/RAPEX notifications, so it overlaps data you'd already pull cleanly from the Safety Gate API.
+- **Recommended route:** Safety Gate API filtered to Germany. Use BAuA only as a scrape supplement for domestic ProdSG prohibition orders not surfaced in Safety Gate.
+
+**3. Vehicles — KBA Rückrufdatenbank (RRDB). Structured export, no API.**
+- Relaunched March 2025; search results downloadable in machine-readable formats (CSV/Excel). No REST API.
+- New recalls published immediately after KBA determines owner addresses.
+- **Completeness caveat:** contains only recall actions carried out using owner addresses from the central vehicle register (ZFZR), logged since 1 May 2004 — not all manufacturer actions.
+
+**4. Medicines / medical devices — BfArM + ABDA/AMK. Scrape or gated.**
+- BfArM publishes medicine recalls / batch recalls on its own website — public but web/scrape. It also runs the DMIDS device databases (mix of public and fee-based, mostly administrative data).
+- The ABDA/AMK "AMK-Nachrichten" RSS feed (`abda.de/rss`) delivers recalls, batch recalls, and batch checks daily — **but the full recall content sits in the members' area behind a pharmacist login** (credentials printed in the Pharmazeutische Zeitung), and AMK notices are restricted to certain professional groups. So without pharmacy membership you get headlines, not full structured detail.
+- Net: German pharma is **not** easier than French pharma — public route is BfArM scrape; the structured ABDA feed is gated.
+
+**Germany resolves to 4 sources:** Lebensmittelwarnung (RSS) + Safety Gate-DE (API; skip BAuA) + KBA (CSV/Excel export) + BfArM scrape (ABDA feed gated). Only one of the four gives a clean, free, open feed.
+
+---
+
+## Structural notes
+
+**Pharma is the perennial hard category — everywhere.** Consumer goods, food, and vehicles increasingly have clean feeds (openFDA, RappelConso, NHTSA, CPSC, Safety Gate, KBA export). Medicines and medical devices are scrape-or-restricted almost universally: UK (MHRA scrape), France (ANSM scrape), Germany (BfArM scrape / ABDA gated), EU (RASFF restricted). If pharma is out of scope, the whole job gets dramatically easier across every country.
+
+**Non-API sources in this set (web/scrape or gated):** UK OPSS, UK MHRA, EU RASFF, France ANSM, Germany BAuA, Germany KBA (export-only, no API), Germany BfArM. Everything else is a real feed with no auth.
+
+**Aggregation effort is driven by intra-country fragmentation, not cross-border stitching.**
+- Government already aggregates (mirror the file, little to add): **Canada** (all categories, all agencies, one licensed dump). **France** largely so (one broad API + pharma gap).
+- Internally fragmented (you consolidate multiple agencies even for one country): **US** (openFDA + FSIS + CPSC + NHTSA), **UK** (FSA + OPSS + MHRA), **Germany** (BVL + Safety Gate/BAuA + KBA + BfArM).
+
+**Full food coverage takes two sources per jurisdiction** (except Canada): US = openFDA food + FSIS; EU has no usable EU-wide food feed (RASFF isn't practically integratable), so EU food is national feed by national feed.
+
+**Persist everything on ingest.** Germany actively deletes expired records; RASFF's public window only reaches back to 2020; others prune too. Your archive will quickly become more complete than several upstream sources themselves.
