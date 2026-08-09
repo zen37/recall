@@ -21,9 +21,34 @@ Living build log. Do the steps in order. Each step has **what to do → how to v
 
 ---
 
+## Phasing: openFDA-only vertical slice first
+
+**Phase 1 (current):** openFDA only, all the way through Steps 1–5, in the browser. FSIS is the
+one genuinely unknown data source (unconfirmed field names); Lakebase, Vector Search, the agent,
+and the app are the genuinely unknown *plumbing* (never wired together, fast-moving surfaces). Keep
+those separate — one clean, predictable source through the whole pipeline first, so a break points
+at the plumbing, not the data.
+
+In `01_ingest.py`, `fsis = fetch_fsis()` is commented out and replaced with `fsis = []`.
+`fetch_fsis` and `map_fsis` stay in the file, unused. Since the FSIS branch of every downstream
+list comprehension iterates an empty list, nothing else in the notebook needed to change.
+
+**Phase 1 checkpoint (done-when):** `unified` has only `openfda_food / food` rows, and that data is
+visibly flowing end to end — through Lakebase, into the Vector Search index, through the agent, and
+showing up in the app in the browser.
+
+**Phase 2:** flip FSIS back on — uncomment `fetch_fsis()` in the fetch cell, run the inspect cell,
+fix the four `?` fields in `map_fsis` (`field_title`/`field_summary`/`field_establishment`/press
+release URL) if they differ from the fallbacks, re-run ingest. No schema change — `unified` keeps
+its columns exactly as-is. Everything downstream (Lakebase sync, Vector Search index, agent, app)
+just picks up the extra `fsis / meat_poultry` rows automatically.
+
+---
+
 ## Step 1 — Ingest
 
 Fetch openFDA food + FSIS → map → **one table** `adw.recalls.unified`. Overwrite on re-run.
+Currently running **phase 1 (openFDA only)** — see phasing note above.
 
 ### Prerequisites
 - Azure Databricks workspace with Unity Catalog — ✅ confirmed.
@@ -38,16 +63,19 @@ Fetch openFDA food + FSIS → map → **one table** `adw.recalls.unified`. Overw
 4. **Run all.**
 
 ### Verify (done-when)
-- Fetch cell prints roughly `openFDA: 1000 | FSIS: <a few hundred>`.
-- FSIS inspect cell prints one JSON record — check the field names. If `field_title` / `field_summary` / `field_establishment` / press-release URL differ from the fallbacks, edit `map_fsis` and re-run.
-- "Quick check" shows a `groupBy(source, category)` count with both `openfda_food / food` and `fsis / meat_poultry`, plus a 10-row sample.
+- Fetch cell prints roughly `openFDA: 1000 | FSIS: 0` (phase 1 — FSIS disabled).
+- FSIS inspect cell prints `no FSIS records returned` (expected in phase 1).
+- "Quick check" shows a `groupBy(source, category)` count with `openfda_food / food` only (phase 1).
 - Table exists: `adw.recalls.unified`.
 
 ### If something's off
 - **`openFDA: 0`** → outbound internet blocked, or (rarely) the unauth daily rate limit. Check egress first.
+- **Permission error on `CREATE SCHEMA`** → request `CREATE SCHEMA` on `adw`, or point the widget at a schema you own.
+
+### Phase 2 additions (once phase 1 checkpoint is done)
 - **FSIS count 0 / error** → response envelope may have changed. Print `type(data)` in `fetch_fsis` and report.
 - **Null `brand`/`title` for FSIS** → a `?` field name is wrong; fix in `map_fsis` from the inspect output.
-- **Permission error on `CREATE SCHEMA`** → request `CREATE SCHEMA` on `adw`, or point the widget at a schema you own.
+- After fixing, "Quick check" should show both `openfda_food / food` and `fsis / meat_poultry`.
 
 ### Output
 `adw.recalls.unified` — the single table every later step reads from.
