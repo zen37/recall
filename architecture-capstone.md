@@ -4,15 +4,43 @@ A Databricks app that ingests US product recalls, makes them semantically search
 
 ## Flow
 
-```mermaid
-flowchart TD
-  API["Third-party APIs: openFDA, CPSC, NHTSA, FSIS"] --> PIPE["Spark pipeline (Lakeflow / Auto Loader)<br/>landing -> bronze -> silver -> gold"]
-  PIPE --> LKB["Lakebase (Postgres)<br/>relational recall + watchlist tables"]
-  PIPE --> EMB["Embeddings + Vector Search<br/>over recall narrative text"]
-  LKB --> AGENT["AI agent (Mosaic AI Agent Framework)"]
-  EMB --> AGENT
-  AGENT --> APP["Databricks App frontend<br/>chat + search UI"]
 ```
+             +---------------+
+             |  Recall APIs  |
+             +-------+-------+
+                     |
+                     v
+             +---------------+
+             | Spark pipeline|
+             +-------+-------+
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+    +------------+      +----------------+
+    |  Lakebase  |      |  Vector Search |
+    +-----+------+      +--------+-------+
+          |                      |
+          +----------+-----------+
+                     |
+                     v
+             +---------------+
+             |   AI agent    |
+             +-------+-------+
+                     |
+                     v
+             +---------------+
+             |  App frontend |
+             +---------------+
+```
+
+Detail for each node:
+- **Recall APIs** — openFDA, CPSC, NHTSA, FSIS (third-party APIs)
+- **Spark pipeline** — Lakeflow / Auto Loader; landing → bronze → silver → gold
+- **Lakebase** — Postgres; relational recall + watchlist tables
+- **Vector Search** — embeddings over recall narrative text
+- **AI agent** — Mosaic AI Agent Framework; read + write tools
+- **App frontend** — Databricks App; chat + search UI
 
 ## Requirement coverage
 
