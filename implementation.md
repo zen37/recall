@@ -218,7 +218,7 @@ write tool has no visible effect.
 
 `GET /watchlist` does, for the caller identified by `X-Forwarded-Email`:
 
-1. `SELECT term FROM watchlist WHERE "user" = %s` — direct psycopg2 read from Lakebase, **not** via
+1. `SELECT term FROM watchlist WHERE user_email = %s` — direct psycopg2 read from Lakebase, **not** via
    the agent. No LLM needed to list rows.
 2. For each term, run `index.similarity_search(query_text=term, num_results=5)`.
 3. Return `{term: [matches]}` and render it as a section per term.
