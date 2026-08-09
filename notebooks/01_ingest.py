@@ -165,3 +165,47 @@ display(spark.table(f"{catalog}.{schema}.unified").groupBy("source", "category")
 display(spark.table(f"{catalog}.{schema}.unified")
         .select("source", "recall_date", "classification", "brand", "title")
         .orderBy("recall_date", ascending=False).limit(10))
+
+# COMMAND ----------
+# MAGIC %md ## Post-write checks
+# MAGIC
+# MAGIC Runs on every ingest. Two hard asserts (things that break Step 3) and one soft warning.
+# MAGIC
+# MAGIC - `recall_id` must be unique — it's the primary key of the Vector Search index.
+# MAGIC - Step 3 builds `search_text` from `product_description` + `reason_hazard`. A row null in
+# MAGIC   both embeds as an empty string and is effectively invisible to semantic search. Not fatal,
+# MAGIC   so it warns rather than fails — but you want to know the number.
+
+# COMMAND ----------
+from pyspark.sql import functions as F
+
+t = spark.table(f"{catalog}.{schema}.unified")
+
+stats = t.select(
+    F.count("*").alias("rows"),
+    F.countDistinct("recall_id").alias("distinct_ids"),
+    F.min("recall_date").alias("earliest"),
+    F.max("recall_date").alias("latest"),
+    F.sum(F.col("product_description").isNull().cast("int")).alias("null_desc"),
+    F.sum(F.col("reason_hazard").isNull().cast("int")).alias("null_reason"),
+    F.sum((F.col("product_description").isNull() & F.col("reason_hazard").isNull())
+          .cast("int")).alias("null_both"),
+).collect()[0]
+
+print(stats)
+
+assert stats["rows"] > 0, "unified is empty — check the fetch cell"
+assert stats["distinct_ids"] == stats["rows"], (
+    f"recall_id not unique ({stats['distinct_ids']} distinct / {stats['rows']} rows) — "
+    "Vector Search needs a unique primary key"
+)
+
+if stats["null_both"]:
+    print(f"WARNING: {stats['null_both']} rows have neither product_description nor "
+          "reason_hazard — these will be invisible to semantic search in Step 3")
+else:
+    print("OK: every row has search text")
+
+print(f"date window: {stats['earliest']} -> {stats['latest']}")
+print("NOTE: mode('overwrite') + the API's 1000 most recent means this window slides — "
+      "older records drop off on re-run. Switch to MERGE if that matters.")
