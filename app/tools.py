@@ -12,6 +12,8 @@ they work *before* an LLM is involved (see notebooks/04_agent.py). Lives in
 (the app and the agent) import from here.
 """
 
+import os
+
 from lakebase import connect  # same folder (app/); notebook adds ../app to sys.path
 
 # Step 3 handles — the ONLINE delta-sync index and its endpoint.
@@ -42,7 +44,20 @@ def _index():
     if _vsc is None:
         from databricks.vector_search.client import VectorSearchClient
 
-        _vsc = VectorSearchClient(disable_notice=True)
+        kwargs = {"disable_notice": True}
+        # In a Databricks App the client won't auto-detect creds — pass the
+        # app service principal's injected OAuth creds explicitly. In a notebook
+        # these env vars are absent and the client uses ambient auth.
+        cid = os.environ.get("DATABRICKS_CLIENT_ID")
+        secret = os.environ.get("DATABRICKS_CLIENT_SECRET")
+        host = os.environ.get("DATABRICKS_HOST")
+        if cid and secret and host:
+            kwargs.update(
+                workspace_url=host,
+                service_principal_client_id=cid,
+                service_principal_client_secret=secret,
+            )
+        _vsc = VectorSearchClient(**kwargs)
     return _vsc.get_index(endpoint_name=VS_ENDPOINT, index_name=VS_INDEX)
 
 
