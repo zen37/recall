@@ -106,7 +106,20 @@ class RecallsAgent(ChatAgent):
     @property
     def client(self):
         if self._client is None:
-            self._client = WorkspaceClient().serving_endpoints.get_open_ai_client()
+            w = WorkspaceClient()
+            sep = w.serving_endpoints
+            # Newer databricks-sdk ships this helper; the Apps runtime may pin an
+            # older SDK without it, so fall back to building an OpenAI client
+            # against the serving-endpoints URL with a fresh workspace token.
+            if hasattr(sep, "get_open_ai_client"):
+                self._client = sep.get_open_ai_client()
+            else:
+                from openai import OpenAI
+
+                host = w.config.host.rstrip("/")
+                auth = w.config.authenticate()  # {"Authorization": "Bearer <token>"}
+                token = auth.get("Authorization", "").split(" ", 1)[-1]
+                self._client = OpenAI(api_key=token, base_url=f"{host}/serving-endpoints")
         return self._client
 
     def _to_openai(self, messages: list) -> list:
