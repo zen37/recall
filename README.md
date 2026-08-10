@@ -93,3 +93,45 @@ Two options:
   complementing the semantic `/search`. If structured browsing like that is planned, keep the table
   (and switch its load to a keep-in-sync path — a UC→Lakebase synced table, or re-run the load on
   each ingest — so it stops going stale).
+
+## Lakebase Change Data Feed (CDF)
+Persist Lakebase tables' Change Data Feed to Unity Catalog.
+
+If you have a **watchlist of products** stored in Lakebase and you enable CDF, here's how it could help your recalls search app:
+
+### What CDF gives you for a watchlist
+
+Every time a product is **added to, removed from, or updated on** the watchlist in Lakebase, that change streams into a `lb_<watchlist_table>_history` Delta table in Unity Catalog within ~15 seconds.
+
+### Practical use cases for your scenario
+
+| Use case                    | How it helps                                                                                                                                                                                                                             |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Proactive recall alerts** | A downstream pipeline watches the CDF feed. When a new product is added to the watchlist, it automatically cross-references against your `unified_search_index` recalls data — if there's a matching recall, it triggers a notification. |
+| **Audit trail**             | You get a full history of what was on the watchlist and when — useful for compliance ("was this product being monitored when the recall was issued?").                                                                                   |
+| **Keep analytics in sync**  | Build a silver/gold table in Unity Catalog that always reflects the current watchlist state. Dashboards and reports stay up to date without manual ETL.                                                                                  |
+| **Trigger re-indexing**     | When a product is added/removed from the watchlist, a pipeline could update your vector search index or adjust search relevance/filtering.                                                                                               |
+### Example flow
+
+```
+User adds "Brand X Baby Monitor" to watchlist in Lakebase
+        ↓ (~15 sec)
+CDF writes INSERT row to lb_watchlist_history in Unity Catalog
+        ↓
+Streaming job picks up the change
+        ↓
+Queries unified_search_index for matching recalls
+        ↓
+Finds active recall → sends alert to user
+```
+
+### Without CDF
+
+You'd need to either:
+- Poll the Lakebase table on a schedule (latency, wasted compute)
+- Build your own CDC pipeline with external tools (complexity)
+- Handle everything in the app layer (no audit trail, no lakehouse integration)
+
+### Bottom line
+
+CDF turns your watchlist from a static app-only table into a **reactive event source** that the rest of your Databricks lakehouse can act on — alerts, analytics, and audit all come for free.
