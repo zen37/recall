@@ -51,6 +51,10 @@ def _index():
         cid = os.environ.get("DATABRICKS_CLIENT_ID")
         secret = os.environ.get("DATABRICKS_CLIENT_SECRET")
         host = os.environ.get("DATABRICKS_HOST")
+        if host and not host.startswith("http"):
+            # Apps inject DATABRICKS_HOST as a bare hostname; the client builds
+            # the OAuth token URL by concatenation and needs the scheme.
+            host = "https://" + host
         if cid and secret and host:
             kwargs.update(
                 workspace_url=host,
