@@ -79,6 +79,14 @@ Two options:
   Recommended unless the option below is on the roadmap. Note: keep the `watchlist` table; that one
   *is* load-bearing (the app reads and writes it live).
 
+  *Why it was there in the first place:* the original plan built the search index as **IDs-only** —
+  the app would query Vector Search for matching `recall_id`s, then **join back to the Lakebase
+  `recalls` table** to fetch the display fields (title, brand, date, hazard…). Under that design the
+  Postgres copy was essential, which is why Step 2 loaded it. Step 3 then chose the opposite: make
+  the index **return the full display set** so results render in one call with no join. That decision
+  made the round-trip to Postgres unnecessary and orphaned the table. It's a fossil of the earlier
+  "IDs-only index + Postgres join" approach that was superseded.
+
 - **Keep it only for faceted / filtered querying.** Semantic (vector) search is weak at exact
   filters and ordering — "show all **Class I** recalls," "filter by **brand**," "sort by **date**."
   A relational `recalls` table in Postgres answers those with plain indexed `WHERE` / `ORDER BY`,
