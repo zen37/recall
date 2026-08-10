@@ -1,0 +1,6 @@
+flask
+databricks-vectorsearch
+psycopg2-binary
+databricks-sdk
+openai
+mlflow

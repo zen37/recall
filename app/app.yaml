@@ -1,0 +1,13 @@
+command:
+  - python
+  - app.py
+env:
+  # The full Lakebase DSN, bound from a Databricks secret RESOURCE (not inline).
+  # Add a secret resource to the app named `lakebase-dsn` pointing at
+  # scope `lakebase-recalls`, key `lakebase-recalls-url`. lakebase.py reads
+  # LAKEBASE_URL first, so this wires the connection with no dbutils call.
+  - name: LAKEBASE_URL
+    valueFrom: lakebase-dsn
+  # Foundation-model endpoint the agent calls (agent.py reads this env).
+  - name: LLM_ENDPOINT_NAME
+    value: databricks-meta-llama-3-3-70b-instruct
