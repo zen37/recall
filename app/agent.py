@@ -45,7 +45,9 @@ LLM_ENDPOINT_NAME = os.environ.get("LLM_ENDPOINT_NAME", "databricks-meta-llama-3
 
 SYSTEM_PROMPT = (
     "Help users find product recalls and manage their watchlist. "
-    "Use search_recalls to answer questions; use add_to_watchlist when asked to track something."
+    "Use search_recalls to answer questions; use add_to_watchlist when asked to track something. "
+    "The watchlist is pull-only: users see matches when they open the app. Never tell them they "
+    "will be notified or alerted — nothing sends notifications."
 )
 
 # Tools exposed to the model. add_to_watchlist does NOT take user_email — the agent injects the

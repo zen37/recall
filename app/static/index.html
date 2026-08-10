@@ -47,9 +47,56 @@
     .link { background: none; border: 0; color: var(--danger); cursor: pointer;
       font-size: 12px; padding: 2px 4px; }
     .empty { color: var(--muted); font-size: 13px; }
+    /* Help panel */
+    .help-btn { position: fixed; top: 16px; right: 16px; z-index: 30; background: var(--card);
+      color: var(--accent); border: 1px solid var(--line); border-radius: 999px;
+      padding: 7px 15px; font-size: 13px; cursor: pointer; }
+    .help-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); opacity: 0;
+      pointer-events: none; transition: opacity .2s; z-index: 40; }
+    .help-backdrop.open { opacity: 1; pointer-events: auto; }
+    .help-panel { position: fixed; top: 0; right: 0; height: 100%; width: 350px; max-width: 88vw;
+      background: var(--card); border-left: 1px solid var(--line); transform: translateX(100%);
+      transition: transform .22s ease; z-index: 50; padding: 22px 20px; overflow-y: auto;
+      box-shadow: -8px 0 24px rgba(0,0,0,.14); }
+    .help-panel.open { transform: translateX(0); }
+    .help-panel h3 { margin: 0 0 6px; font-size: 16px; }
+    .help-panel h4 { margin: 18px 0 4px; font-size: 13.5px; }
+    .help-panel p { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+    .help-panel .close { position: absolute; top: 12px; right: 14px; background: none; border: 0;
+      color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; padding: 0; }
+    .help-panel .note { background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+      padding: 10px 12px; margin-top: 12px; }
+    .help-panel .note p { color: var(--ink); }
   </style>
 </head>
 <body>
+  <button class="help-btn" id="helpBtn">? Help</button>
+  <div class="help-backdrop" id="helpBackdrop"></div>
+  <aside class="help-panel" id="helpPanel" aria-label="Help">
+    <button class="close" id="helpClose" aria-label="Close help">&times;</button>
+    <h3>About this screen</h3>
+    <p>Semantic search over US openFDA food recalls, with an AI assistant and a personal watchlist.
+      You're signed in via Databricks SSO; your watchlist is tied to your email.</p>
+
+    <h4>🔎 Search recalls</h4>
+    <p>Type a phrase like “listeria in deli meat”. It runs an instant semantic search and lists the
+      closest-matching recalls. No AI — the same query always returns the same ranked list.</p>
+
+    <h4>💬 Assistant</h4>
+    <p>An AI helper that reads your wording and decides what to do:</p>
+    <p>• Ask a question (“any lettuce recalls?”) → it searches and answers in prose.<br>
+      • Say “watch lettuce for me” → it adds that term to your watchlist.</p>
+    <p>Same-looking words, opposite intent — that's why this uses a model, not a plain search.</p>
+
+    <h4>⭐ My watchlist</h4>
+    <p>The terms you've asked to track. Each time you open or refresh the page, every term is searched
+      live and its current matches are shown. Use “remove” to drop one.</p>
+
+    <div class="note">
+      <p><strong>Pull, not push.</strong> You see matches only when you open the app. Nothing runs in
+        the background and nothing notifies you — this is not an alert system.</p>
+    </div>
+  </aside>
   <div class="wrap">
     <h1>US Food Recalls</h1>
     <p class="sub">Semantic search over openFDA food recalls, an assistant that can search or track
@@ -174,6 +221,15 @@
     $("chatBtn").addEventListener("click", doChat);
     $("msg").addEventListener("keydown", (e) => { if (e.key === "Enter") doChat(); });
     $("refreshBtn").addEventListener("click", loadWatchlist);
+
+    function toggleHelp(open) {
+      $("helpPanel").classList.toggle("open", open);
+      $("helpBackdrop").classList.toggle("open", open);
+    }
+    $("helpBtn").addEventListener("click", () => toggleHelp(true));
+    $("helpClose").addEventListener("click", () => toggleHelp(false));
+    $("helpBackdrop").addEventListener("click", () => toggleHelp(false));
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") toggleHelp(false); });
 
     loadWatchlist();
   </script>
