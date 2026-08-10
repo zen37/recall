@@ -37,15 +37,6 @@ deploys only that folder — the notebooks and the app import the same modules.
 > pipeline already accommodate it. See [`implementation.md`](implementation.md) for the step-by-step
 > build log and [`docs/`](docs) for architecture notes.
 
-## Repo layout
-
-```
-notebooks/   01_ingest · 02_lakebase · 03_vector_search · 04_agent
-app/         app.py, agent.py, tools.py, lakebase.py, app.yaml, requirements.txt, static/index.html
-implementation.md   step-by-step build log
-docs/        architecture notes
-```
-
 # Screenshots
 
 <img width="1161" height="898" alt="image" src="https://github.com/user-attachments/assets/6d0c86bb-08d2-4d12-bad4-f474058c7027" />
