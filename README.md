@@ -44,7 +44,9 @@ https://recalls-7405613269176411.11.azure.databricksapps.com
 <img width="1161" height="898" alt="image" src="https://github.com/user-attachments/assets/6d0c86bb-08d2-4d12-bad4-f474058c7027" />
 
 
-# Mobile App - To Do
+# To Do
+
+## Mobile App
 
 A consumer front-end that turns the watchlist into a zero-effort habit — instead of typing terms,
 you scan what you actually bought:
@@ -61,3 +63,25 @@ This is the **push** half the current MVP deliberately skips (see *Future work* 
 [`implementation.md`](implementation.md)): scheduled ingest + change detection (a `first_seen`
 column) + delivery. No new backend architecture — the web app already proves the round-trip; the
 mobile app just adds an OCR on-ramp and flips **pull → push**.
+
+## Lakebase Table 'Recalls'
+
+The Lakebase `recalls` table (loaded in Step 2) is **unused by the app** — every recall shown in the
+UI comes back through the Vector Search index, never from Postgres. Once the index was built to
+return the full display columns (Step 3), the app renders results in one call with no join back to
+Lakebase, which removed the reason for this table. It's also **stale**: Step 2 is a one-time
+`psycopg2` load with no auto-sync, so it drifts from `adw.recalls.unified` on any re-ingest.
+
+Two options:
+
+- **Drop it (cleanest).** Removes a frozen, unread copy of ~1,000 rows and the drift it invites.
+  `DROP TABLE recalls;` in Lakebase. The app is unaffected — it doesn't reference this table.
+  Recommended unless the option below is on the roadmap. Note: keep the `watchlist` table; that one
+  *is* load-bearing (the app reads and writes it live).
+
+- **Keep it only for faceted / filtered querying.** Semantic (vector) search is weak at exact
+  filters and ordering — "show all **Class I** recalls," "filter by **brand**," "sort by **date**."
+  A relational `recalls` table in Postgres answers those with plain indexed `WHERE` / `ORDER BY`,
+  complementing the semantic `/search`. If structured browsing like that is planned, keep the table
+  (and switch its load to a keep-in-sync path — a UC→Lakebase synced table, or re-run the load on
+  each ingest — so it stops going stale).
