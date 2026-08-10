@@ -39,7 +39,25 @@ deploys only that folder — the notebooks and the app import the same modules.
 
 # Screenshots
 
+https://recalls-7405613269176411.11.azure.databricksapps.com
+
 <img width="1161" height="898" alt="image" src="https://github.com/user-attachments/assets/6d0c86bb-08d2-4d12-bad4-f474058c7027" />
 
 
 # Mobile App - To Do
+
+A consumer front-end that turns the watchlist into a zero-effort habit — instead of typing terms,
+you scan what you actually bought:
+
+1. **Snap your receipt** — photograph a grocery receipt; OCR extracts the line items.
+2. **Items are saved** — the extracted product/brand names become watchlist terms in Lakebase, tied
+   to your account (reusing the agent's `add_to_watchlist` write).
+3. **Monitoring runs automatically** — new recalls are matched against your saved items and pushed to
+   you when one hits.
+
+![Mobile app concept](docs/mobile-app-mockup.svg)
+
+This is the **push** half the current MVP deliberately skips (see *Future work* in
+[`implementation.md`](implementation.md)): scheduled ingest + change detection (a `first_seen`
+column) + delivery. No new backend architecture — the web app already proves the round-trip; the
+mobile app just adds an OCR on-ramp and flips **pull → push**.
